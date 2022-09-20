@@ -1,0 +1,74 @@
+Parameters:
+  App:
+    Type: String
+    Description: Your application's name.
+  Env:
+    Type: String
+    Description: The environment name your service, job, or workflow is being deployed to.
+  Name:
+    Type: String
+    Description: The name of the service, job, or workflow being deployed.
+  DiscoveryServiceARN:
+    Type: String
+    Description: The ARN of the Cloud Map discovery service.
+
+Resources:
+  SubnetsAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: EC2Actions
+            Effect: Allow
+            Action:
+              - ec2:DescribeSubnets
+            Resource: "*"
+
+  ApiVpcLink:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: !Sub "${App}-${Env}-${Name}"
+      SubnetIds:
+        !Split [",", Fn::ImportValue: !Sub "${App}-${Env}-PrivateSubnets"]
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub "${App}-${Env}-EnvironmentSecurityGroup"
+
+  ApiGatewayV2Api:
+    Type: "AWS::ApiGatewayV2::Api"
+    Properties:
+      Name: !Sub "${Name}.${Env}.${App}.api"
+      ProtocolType: "HTTP"
+      CorsConfiguration:
+        AllowHeaders:
+          - "*"
+        AllowMethods:
+          - "*"
+        AllowOrigins:
+          - "*"
+
+  ApiGatewayV2Stage:
+    Type: "AWS::ApiGatewayV2::Stage"
+    Properties:
+      StageName: "$default"
+      ApiId: !Ref ApiGatewayV2Api
+      AutoDeploy: true
+
+  ApiGatewayV2Integration:
+    Type: "AWS::ApiGatewayV2::Integration"
+    Properties:
+      ApiId: !Ref ApiGatewayV2Api
+      ConnectionId: !Ref ApiVpcLink
+      ConnectionType: "VPC_LINK"
+      IntegrationMethod: "ANY"
+      IntegrationType: "HTTP_PROXY"
+      IntegrationUri: !Sub "${DiscoveryServiceARN}"
+      TimeoutInMillis: 30000
+      PayloadFormatVersion: "1.0"
+
+  ApiGatewayV2Route:
+    Type: "AWS::ApiGatewayV2::Route"
+    Properties:
+      ApiId: !Ref ApiGatewayV2Api
+      RouteKey: "$default"
+      Target: !Sub "integrations/${ApiGatewayV2Integration}"

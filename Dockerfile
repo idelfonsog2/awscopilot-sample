@@ -1,12 +1,13 @@
 # ================================
 # Build image
 # ================================
-FROM swift:5.6-focal as build
+FROM public.ecr.aws/docker/library/swift:5.7.0-focal as build
 
-# Install OS updates and, if needed, sqlite3
+# Install OS updates
 RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
     && apt-get -q update \
     && apt-get -q dist-upgrade -y \
+    && apt-get -y install libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up a build area
@@ -42,7 +43,7 @@ RUN [ -d /build/Resources ] && { mv /build/Resources ./Resources && chmod -R a-w
 # ================================
 # Run image
 # ================================
-FROM ubuntu:focal
+FROM public.ecr.aws/ubuntu/ubuntu:focal
 
 # Make sure all system packages are up to date, and install only essential packages.
 RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
@@ -51,10 +52,8 @@ RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
     && apt-get -q install -y \
       ca-certificates \
       tzdata \
-# If your app or its dependencies import FoundationNetworking, also install `libcurl4`.
-      # libcurl4 \
-# If your app or its dependencies import FoundationXML, also install `libxml2`.
-      # libxml2 \
+      curl \
+      libxml2 \
     && rm -r /var/lib/apt/lists/*
 
 # Create a vapor user and group with /app as its home directory
